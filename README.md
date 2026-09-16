@@ -205,6 +205,12 @@ LifePoints 更像一个简单的个人反馈工具。
 
 如果你发现 Bug、有功能建议，或者觉得某个交互还能更顺手，也欢迎通过 GitHub Issues 反馈。
 
+<p align="center">
+  <img height="420" src="https://github.com/user-attachments/assets/cd0eb38f-575f-4779-8fca-1355c7d1d0ed" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img height="420" src="https://github.com/user-attachments/assets/f1025770-c15a-413b-9e18-a3577ecc07aa" />
+</p>
+
 ---
 
 **Do something → Earn points → Spend points on something you enjoy.**
