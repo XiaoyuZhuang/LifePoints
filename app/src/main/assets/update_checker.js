@@ -52,8 +52,15 @@
     }
   };
 
+  const HAD_SAVED_STATE = !!localStorage.getItem('lifepoints-state');
   if (state.language !== 'zh' && state.language !== 'en') {
     state.language = DEFAULT_LANG;
+    if (!HAD_SAVED_STATE && DEFAULT_LANG === 'zh') {
+      const taskNames = ['学习','运动','工作','健康'];
+      const rewardNames = ['看一集剧','看一部电影','喜欢的零食'];
+      state.tasks.forEach((item,i)=>{ if (taskNames[i]) item.name = taskNames[i]; });
+      state.rewards.forEach((item,i)=>{ if (rewardNames[i]) item.name = rewardNames[i]; });
+    }
     save();
   }
 
@@ -78,7 +85,7 @@
     'Confirm before spending points','Haptics','Icon library','Task icons','Reward icons','Tap × to remove an icon',
     'App','Support me','About LifePoints','Check for updates','Export data','Clear all data','Tasks','Rewards','Name','Icon','(optional)','Cancel','Save','Add','OK','Confirm'
   ]);
-  document.querySelectorAll('h1,.st,.ml,.tl,.sl,.theme,.fontBtn,.miniAdd,.nb span,.field label,.field label span,.cancel,.save,.iconLibraryTitle span').forEach(el => {
+  document.querySelectorAll('h1,.st,.ml,.tl,.sl,.theme,.fontBtn,.miniAdd,.add,.nb span,.field label,.field label span,.cancel,.save,.iconLibraryTitle span').forEach(el => {
     const raw = el.textContent.trim();
     if (staticKeys.has(raw)) el.dataset.lpI18n = raw;
   });
@@ -110,6 +117,15 @@
     if (iicon) iicon.placeholder = t('iconPlaceholder');
     if (newIcon) newIcon.placeholder = t('newIconPlaceholder');
     if (hint) hint.textContent = t('iconHint');
+    const itemIconLabel = document.querySelector('#itemBack .field:nth-of-type(3) label');
+    if (itemIconLabel) {
+      for (const node of itemIconLabel.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
+          node.nodeValue = t('Icon') + ' ';
+          break;
+        }
+      }
+    }
 
     const updateRowText = byId('checkUpdate')?.querySelector('.sl');
     if (updateRowText) updateRowText.textContent = t('Check for updates');
