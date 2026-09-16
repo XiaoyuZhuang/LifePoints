@@ -207,10 +207,4 @@ LifePoints 更像一个简单的个人反馈工具。
 
 ---
 
-## License
-
-目前请以仓库中实际提供的 License 文件为准。
-
----
-
 **Do something → Earn points → Spend points on something you enjoy.**
