@@ -1,5 +1,9 @@
 # LifePoints
 
+<p align="right">
+  <strong>简体中文</strong> | <a href="./README_EN.md">English</a>
+</p>
+
 [![Latest Release](https://img.shields.io/github/v/release/XiaoyuZhuang/LifePoints?label=latest)](https://github.com/XiaoyuZhuang/LifePoints/releases/latest)
 [![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-green)](https://github.com/XiaoyuZhuang/LifePoints/releases/latest)
 
