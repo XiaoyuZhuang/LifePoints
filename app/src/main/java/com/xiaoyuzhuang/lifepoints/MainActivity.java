@@ -68,16 +68,14 @@ public class MainActivity extends Activity {
             int top;
             int bottom;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                android.graphics.Insets bars =
-                        insets.getInsets(WindowInsets.Type.systemBars());
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
                 top = bars.top;
                 bottom = bars.bottom;
             } else {
                 top = insets.getSystemWindowInsetTop();
                 bottom = insets.getSystemWindowInsetBottom();
             }
-            FrameLayout.LayoutParams lp =
-                    (FrameLayout.LayoutParams) webView.getLayoutParams();
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) webView.getLayoutParams();
             if (lp.topMargin != top || lp.bottomMargin != bottom) {
                 lp.topMargin = top;
                 lp.bottomMargin = bottom;
@@ -107,12 +105,13 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 injectAssetScript("timeline_undo.js");
                 injectAssetScript("update_checker.js");
+                injectAssetScript("reward_multiplier.js");
                 injectAssetScript("settings_enhancements.js");
+                injectAssetScript("update_failure_ui.js");
             }
 
             @Override
-            public boolean shouldOverrideUrlLoading(
-                    WebView view, WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return openExternal(request.getUrl());
             }
 
@@ -123,15 +122,11 @@ public class MainActivity extends Activity {
 
             private boolean openExternal(Uri uri) {
                 String scheme = uri.getScheme();
-                if ("http".equalsIgnoreCase(scheme)
-                        || "https".equalsIgnoreCase(scheme)) {
+                if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, uri));
                     } catch (Exception e) {
-                        toast(localized(
-                                "No browser available",
-                                "没有可用的浏览器"
-                        ));
+                        toast(localized("No browser available", "没有可用的浏览器"));
                     }
                     return true;
                 }
@@ -161,10 +156,7 @@ public class MainActivity extends Activity {
 
     private void injectAssetScript(String assetName) {
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                        getAssets().open(assetName),
-                        StandardCharsets.UTF_8
-                ))) {
+                new InputStreamReader(getAssets().open(assetName), StandardCharsets.UTF_8))) {
             StringBuilder script = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -196,20 +188,14 @@ public class MainActivity extends Activity {
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                WindowInsetsController controller =
-                        getWindow().getInsetsController();
+                WindowInsetsController controller = getWindow().getInsetsController();
                 if (controller != null) {
-                    int mask =
-                            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                             | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                    controller.setSystemBarsAppearance(
-                            black ? 0 : mask,
-                            mask
-                    );
+                    controller.setSystemBarsAppearance(black ? 0 : mask, mask);
                 }
             } else {
-                int flags =
-                        getWindow().getDecorView().getSystemUiVisibility();
+                int flags = getWindow().getDecorView().getSystemUiVisibility();
                 if (black) {
                     flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -266,11 +252,7 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(
-            int requestCode,
-            int resultCode,
-            Intent data
-    ) {
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != EXPORT_REQUEST_CODE
                 || resultCode != RESULT_OK
@@ -279,16 +261,10 @@ public class MainActivity extends Activity {
             return;
         }
 
-        try (OutputStream out =
-                     getContentResolver().openOutputStream(data.getData())) {
+        try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
             if (out != null && pendingExportJson != null) {
-                out.write(
-                        pendingExportJson.getBytes(StandardCharsets.UTF_8)
-                );
-                toast(localized(
-                        "LifePoints data exported",
-                        "LifePoints 数据已导出"
-                ));
+                out.write(pendingExportJson.getBytes(StandardCharsets.UTF_8));
+                toast(localized("LifePoints data exported", "LifePoints 数据已导出"));
             }
         } catch (Exception e) {
             toast(localized("Export failed", "导出失败"));
@@ -310,9 +286,7 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(
                 "window.LifePointsBack ? String(window.LifePointsBack()) : 'false'",
                 result -> {
-                    boolean handled =
-                            "\"true\"".equals(result)
-                                    || "true".equals(result);
+                    boolean handled = "\"true\"".equals(result) || "true".equals(result);
                     if (!handled) finish();
                 }
         );
