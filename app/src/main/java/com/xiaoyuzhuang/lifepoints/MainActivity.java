@@ -22,16 +22,19 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final int EXPORT_REQUEST_CODE = 1001;
     private static final String PREFS = "lifepoints_native";
     private static final String PREF_THEME = "theme";
+    private static final String PREF_LANGUAGE = "language";
 
     private FrameLayout root;
     private WebView webView;
     private String pendingExportJson;
     private UpdateBridge updateBridge;
+    private String currentLanguage = "en";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +42,9 @@ public class MainActivity extends Activity {
 
         String initialTheme = getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getString(PREF_THEME, "light");
+        String systemLanguage = Locale.getDefault().getLanguage();
+        currentLanguage = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(PREF_LANGUAGE, "zh".equalsIgnoreCase(systemLanguage) ? "zh" : "en");
         int initialColor = "black".equals(initialTheme) ? Color.BLACK : Color.WHITE;
 
         root = new FrameLayout(this);
@@ -121,11 +127,10 @@ public class MainActivity extends Activity {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, uri));
                     } catch (Exception e) {
-                        Toast.makeText(
-                                MainActivity.this,
+                        toast(localized(
                                 "No browser available",
-                                Toast.LENGTH_SHORT
-                        ).show();
+                                "没有可用的浏览器"
+                        ));
                     }
                     return true;
                 }
@@ -135,6 +140,22 @@ public class MainActivity extends Activity {
 
         applyTheme(initialTheme);
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    private String localized(String english, String chinese) {
+        return "zh".equalsIgnoreCase(currentLanguage) ? chinese : english;
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    private void setLanguage(String language) {
+        currentLanguage = "zh".equalsIgnoreCase(language) ? "zh" : "en";
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+                .edit()
+                .putString(PREF_LANGUAGE, currentLanguage)
+                .apply();
     }
 
     private void injectAssetScript(String assetName) {
@@ -257,18 +278,13 @@ public class MainActivity extends Activity {
                 out.write(
                         pendingExportJson.getBytes(StandardCharsets.UTF_8)
                 );
-                Toast.makeText(
-                        this,
+                toast(localized(
                         "LifePoints data exported",
-                        Toast.LENGTH_SHORT
-                ).show();
+                        "LifePoints 数据已导出"
+                ));
             }
         } catch (Exception e) {
-            Toast.makeText(
-                    this,
-                    "Export failed",
-                    Toast.LENGTH_SHORT
-            ).show();
+            toast(localized("Export failed", "导出失败"));
         } finally {
             pendingExportJson = null;
         }
@@ -299,6 +315,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setTheme(String theme) {
             applyTheme(theme);
+        }
+
+        @JavascriptInterface
+        public void setLanguage(String language) {
+            MainActivity.this.setLanguage(language);
         }
 
         @JavascriptInterface
