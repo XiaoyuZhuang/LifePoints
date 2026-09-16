@@ -31,12 +31,14 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private WebView webView;
     private String pendingExportJson;
+    private UpdateBridge updateBridge;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        String initialTheme = getSharedPreferences(PREFS, MODE_PRIVATE).getString(PREF_THEME, "light");
+        String initialTheme = getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(PREF_THEME, "light");
         int initialColor = "black".equals(initialTheme) ? Color.BLACK : Color.WHITE;
 
         root = new FrameLayout(this);
@@ -60,14 +62,16 @@ public class MainActivity extends Activity {
             int top;
             int bottom;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                android.graphics.Insets bars =
+                        insets.getInsets(WindowInsets.Type.systemBars());
                 top = bars.top;
                 bottom = bars.bottom;
             } else {
                 top = insets.getSystemWindowInsetTop();
                 bottom = insets.getSystemWindowInsetBottom();
             }
-            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) webView.getLayoutParams();
+            FrameLayout.LayoutParams lp =
+                    (FrameLayout.LayoutParams) webView.getLayoutParams();
             if (lp.topMargin != top || lp.bottomMargin != bottom) {
                 lp.topMargin = top;
                 lp.bottomMargin = bottom;
@@ -88,15 +92,20 @@ public class MainActivity extends Activity {
         settings.setTextZoom(100);
 
         webView.addJavascriptInterface(new AndroidBridge(), "LifePointsAndroid");
+        updateBridge = new UpdateBridge(this, webView);
+        webView.addJavascriptInterface(updateBridge, "LifePointsUpdater");
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 injectAssetScript("timeline_undo.js");
+                injectAssetScript("update_checker.js");
             }
 
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(
+                    WebView view, WebResourceRequest request) {
                 return openExternal(request.getUrl());
             }
 
@@ -107,11 +116,16 @@ public class MainActivity extends Activity {
 
             private boolean openExternal(Uri uri) {
                 String scheme = uri.getScheme();
-                if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
+                if ("http".equalsIgnoreCase(scheme)
+                        || "https".equalsIgnoreCase(scheme)) {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, uri));
                     } catch (Exception e) {
-                        Toast.makeText(MainActivity.this, "No browser available", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(
+                                MainActivity.this,
+                                "No browser available",
+                                Toast.LENGTH_SHORT
+                        ).show();
                     }
                     return true;
                 }
@@ -125,7 +139,10 @@ public class MainActivity extends Activity {
 
     private void injectAssetScript(String assetName) {
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(getAssets().open(assetName), StandardCharsets.UTF_8))) {
+                new InputStreamReader(
+                        getAssets().open(assetName),
+                        StandardCharsets.UTF_8
+                ))) {
             StringBuilder script = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -141,26 +158,36 @@ public class MainActivity extends Activity {
             boolean black = "black".equalsIgnoreCase(theme);
             int color = black ? Color.BLACK : Color.WHITE;
 
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(PREF_THEME, black ? "black" : "light").apply();
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString(PREF_THEME, black ? "black" : "light")
+                    .apply();
+
             root.setBackgroundColor(color);
             webView.setBackgroundColor(color);
-
             getWindow().setStatusBarColor(color);
             getWindow().setNavigationBarColor(color);
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 getWindow().setStatusBarContrastEnforced(false);
                 getWindow().setNavigationBarContrastEnforced(false);
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                WindowInsetsController controller = getWindow().getInsetsController();
+                WindowInsetsController controller =
+                        getWindow().getInsetsController();
                 if (controller != null) {
-                    int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                    int mask =
+                            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                             | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                    controller.setSystemBarsAppearance(black ? 0 : mask, mask);
+                    controller.setSystemBarsAppearance(
+                            black ? 0 : mask,
+                            mask
+                    );
                 }
             } else {
-                int flags = getWindow().getDecorView().getSystemUiVisibility();
+                int flags =
+                        getWindow().getDecorView().getSystemUiVisibility();
                 if (black) {
                     flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -203,19 +230,56 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    protected void onResume() {
+        super.onResume();
+        if (updateBridge != null) {
+            updateBridge.onResume();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data
+    ) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != EXPORT_REQUEST_CODE || resultCode != RESULT_OK || data == null || data.getData() == null) return;
-        try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+        if (requestCode != EXPORT_REQUEST_CODE
+                || resultCode != RESULT_OK
+                || data == null
+                || data.getData() == null) {
+            return;
+        }
+
+        try (OutputStream out =
+                     getContentResolver().openOutputStream(data.getData())) {
             if (out != null && pendingExportJson != null) {
-                out.write(pendingExportJson.getBytes(StandardCharsets.UTF_8));
-                Toast.makeText(this, "LifePoints data exported", Toast.LENGTH_SHORT).show();
+                out.write(
+                        pendingExportJson.getBytes(StandardCharsets.UTF_8)
+                );
+                Toast.makeText(
+                        this,
+                        "LifePoints data exported",
+                        Toast.LENGTH_SHORT
+                ).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Export failed", Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    this,
+                    "Export failed",
+                    Toast.LENGTH_SHORT
+            ).show();
         } finally {
             pendingExportJson = null;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (updateBridge != null) {
+            updateBridge.shutdown();
+        }
+        super.onDestroy();
     }
 
     @Override
@@ -223,7 +287,9 @@ public class MainActivity extends Activity {
         webView.evaluateJavascript(
                 "window.LifePointsBack ? String(window.LifePointsBack()) : 'false'",
                 result -> {
-                    boolean handled = "\"true\"".equals(result) || "true".equals(result);
+                    boolean handled =
+                            "\"true\"".equals(result)
+                                    || "true".equals(result);
                     if (!handled) finish();
                 }
         );
