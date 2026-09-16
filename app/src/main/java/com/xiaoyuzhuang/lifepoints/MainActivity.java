@@ -211,7 +211,7 @@ public class MainActivity extends Activity {
                 "window.LifePointsBack ? String(window.LifePointsBack()) : 'false'",
                 result -> {
                     boolean handled = "\"true\"".equals(result) || "true".equals(result);
-                    if (!handled) MainActivity.super.onBackPressed();
+                    if (!handled) finish();
                 }
         );
     }
