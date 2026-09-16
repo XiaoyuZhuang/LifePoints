@@ -13,6 +13,13 @@
 
 **完成事情 → 获得积分 → 用积分兑换奖励。**
 
+<p align="center">
+  <img width="23%" src="https://github.com/user-attachments/assets/61cab9da-1d8f-4e0c-b518-13afbf436301" />
+  <img width="23%" src="https://github.com/user-attachments/assets/99b08fac-1678-4d7e-9622-38e1bd89f59f" />
+  <img width="23%" src="https://github.com/user-attachments/assets/10930811-555b-45a7-a369-73480fee5a47" />
+  <img width="23%" src="https://github.com/user-attachments/assets/d24a622f-ac42-44b0-8828-dba2a79299c7" />
+</p>
+
 ---
 
 ## 下载
