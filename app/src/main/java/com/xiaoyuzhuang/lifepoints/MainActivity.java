@@ -1,14 +1,12 @@
 package com.xiaoyuzhuang.lifepoints;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -47,6 +45,7 @@ public class MainActivity extends Activity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
+        webView.setHapticFeedbackEnabled(true);
 
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -56,7 +55,7 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         // Android 15+ forces edge-to-edge for targetSdk 35. Keep the app content
-        // inside the real status/navigation bar insets instead of drawing under them.
+        // inside the actual system bar insets on every device.
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             int top;
             int bottom;
@@ -161,22 +160,20 @@ public class MainActivity extends Activity {
 
     private void performHaptic(String kind) {
         runOnUiThread(() -> {
-            try {
-                Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-                if (vibrator == null || !vibrator.hasVibrator()) return;
-
-                long duration = 14L;
-                if ("success".equalsIgnoreCase(kind)) duration = 28L;
-                if ("warning".equalsIgnoreCase(kind)) duration = 38L;
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE));
-                } else {
-                    vibrator.vibrate(duration);
+            // Use Android's system haptic-feedback pipeline instead of a custom
+            // vibration duration. This respects the user's system haptic setting
+            // and intensity preference on the device.
+            int constant = HapticFeedbackConstants.VIRTUAL_KEY;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if ("success".equalsIgnoreCase(kind)) {
+                    constant = HapticFeedbackConstants.CONFIRM;
+                } else if ("warning".equalsIgnoreCase(kind)) {
+                    constant = HapticFeedbackConstants.REJECT;
                 }
-            } catch (Exception ignored) {
-                // Haptics are optional; never let a device-specific vibrator issue affect the app.
+            } else if ("warning".equalsIgnoreCase(kind)) {
+                constant = HapticFeedbackConstants.LONG_PRESS;
             }
+            webView.performHapticFeedback(constant);
         });
     }
 
