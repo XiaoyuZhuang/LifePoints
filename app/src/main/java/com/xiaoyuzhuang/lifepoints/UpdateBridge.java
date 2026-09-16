@@ -24,16 +24,31 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class UpdateBridge {
+    private static final String REPO_BASE =
+            "https://github.com/XiaoyuZhuang/LifePoints";
     private static final String LATEST_RELEASE_API =
             "https://api.github.com/repos/XiaoyuZhuang/LifePoints/releases/latest";
-    private static final String TRUSTED_RELEASE_PREFIX =
-            "https://github.com/XiaoyuZhuang/LifePoints/releases/download/";
+    private static final String LATEST_RELEASE_PAGE =
+            REPO_BASE + "/releases/latest";
+    private static final String LATEST_APK_URL =
+            REPO_BASE + "/releases/latest/download/LifePoints.apk";
+    private static final String RELEASE_DOWNLOAD_PREFIX =
+            REPO_BASE + "/releases/download/";
+
+    private static final Pattern RELEASE_TAG_PAGE_PATTERN =
+            Pattern.compile("/releases/tag/([^/?#]+)");
+    private static final Pattern RELEASE_TAG_DOWNLOAD_PATTERN =
+            Pattern.compile("/releases/download/([^/?#]+)/");
 
     private final Activity activity;
     private final WebView webView;
@@ -65,8 +80,7 @@ public class UpdateBridge {
 
     @JavascriptInterface
     public void downloadUpdate(String downloadUrl, String version) {
-        if (downloadUrl == null
-                || !downloadUrl.startsWith(TRUSTED_RELEASE_PREFIX)) {
+        if (!isTrustedDownloadUrl(downloadUrl)) {
             sendDownloadState(
                     "error",
                     "The update URL was not recognized."
@@ -97,6 +111,12 @@ public class UpdateBridge {
 
     public void shutdown() {
         executor.shutdownNow();
+    }
+
+    private boolean isTrustedDownloadUrl(String url) {
+        if (url == null) return false;
+        return url.startsWith(RELEASE_DOWNLOAD_PREFIX)
+                || LATEST_APK_URL.equals(url);
     }
 
     private long currentVersionCode() {
@@ -135,20 +155,60 @@ public class UpdateBridge {
         return builder.toString();
     }
 
+    private HttpURLConnection openConnection(String url) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection)
+                new URL(url).openConnection();
+        connection.setConnectTimeout(12000);
+        connection.setReadTimeout(15000);
+        connection.setRequestProperty("User-Agent", "LifePoints-Android");
+        return connection;
+    }
+
     private void checkForUpdateInternal() {
+        List<String> failures = new ArrayList<>();
+
+        try {
+            sendUpdateResult(checkViaApi());
+            return;
+        } catch (Exception e) {
+            failures.add("API");
+        }
+
+        try {
+            sendUpdateResult(checkViaLatestPage());
+            return;
+        } catch (Exception e) {
+            failures.add("release page");
+        }
+
+        try {
+            sendUpdateResult(checkViaLatestAssetRedirect());
+            return;
+        } catch (Exception e) {
+            failures.add("latest asset");
+        }
+
+        try {
+            JSONObject error = new JSONObject();
+            error.put("status", "error");
+            error.put(
+                    "message",
+                    "Could not reach the GitHub release through the available official paths."
+            );
+            error.put("releaseUrl", LATEST_RELEASE_PAGE);
+            sendUpdateResult(error);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private JSONObject checkViaApi() throws Exception {
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection)
-                    new URL(LATEST_RELEASE_API).openConnection();
-            connection.setConnectTimeout(12000);
-            connection.setReadTimeout(12000);
+            connection = openConnection(LATEST_RELEASE_API);
+            connection.setInstanceFollowRedirects(true);
             connection.setRequestProperty(
                     "Accept",
                     "application/vnd.github+json"
-            );
-            connection.setRequestProperty(
-                    "User-Agent",
-                    "LifePoints-Android"
             );
             connection.setRequestProperty(
                     "X-GitHub-Api-Version",
@@ -157,21 +217,7 @@ public class UpdateBridge {
 
             int code = connection.getResponseCode();
             if (code != HttpURLConnection.HTTP_OK) {
-                JSONObject error = new JSONObject();
-                error.put("status", "error");
-                if (code == HttpURLConnection.HTTP_NOT_FOUND) {
-                    error.put(
-                            "message",
-                            "No public release is available. If this repository is private, make it public before using in-app updates."
-                    );
-                } else {
-                    error.put(
-                            "message",
-                            "GitHub returned HTTP " + code + "."
-                    );
-                }
-                sendUpdateResult(error);
-                return;
+                throw new Exception("GitHub API HTTP " + code);
             }
 
             JSONObject release =
@@ -179,7 +225,7 @@ public class UpdateBridge {
             String tag = release.optString("tag_name", "");
             String releaseName = release.optString("name", tag);
             long remoteCode = versionCodeFromTag(tag);
-            long localCode = currentVersionCode();
+            if (remoteCode <= 0) throw new Exception("Invalid release tag");
 
             JSONArray assets = release.optJSONArray("assets");
             String apkUrl = null;
@@ -190,102 +236,192 @@ public class UpdateBridge {
                     String name = asset.optString("name", "");
                     String candidate =
                             asset.optString("browser_download_url", "");
-                    if ("LifePoints.apk".equals(name)) {
+                    if ("LifePoints.apk".equals(name)
+                            && isTrustedDownloadUrl(candidate)) {
                         apkUrl = candidate;
                         break;
                     }
                     if (apkUrl == null
-                            && name.toLowerCase().endsWith(".apk")) {
+                            && name.toLowerCase().endsWith(".apk")
+                            && isTrustedDownloadUrl(candidate)) {
                         apkUrl = candidate;
                     }
                 }
             }
+            if (apkUrl == null) apkUrl = LATEST_APK_URL;
 
-            JSONObject result = new JSONObject();
-            if (remoteCode <= 0 || apkUrl == null || apkUrl.isBlank()) {
-                result.put("status", "error");
-                result.put(
-                        "message",
-                        "The latest GitHub Release does not contain a valid LifePoints APK."
-                );
-            } else if (remoteCode <= localCode) {
-                result.put("status", "latest");
-                result.put("version", releaseName);
-                result.put("currentVersion", getVersionName());
-            } else {
-                result.put("status", "available");
-                result.put("version", releaseName);
-                result.put("versionCode", remoteCode);
-                result.put("currentVersion", getVersionName());
-                result.put("downloadUrl", apkUrl);
-                result.put(
-                        "releaseUrl",
-                        release.optString("html_url", "")
-                );
-            }
-            sendUpdateResult(result);
-        } catch (Exception e) {
-            try {
-                JSONObject error = new JSONObject();
-                error.put("status", "error");
-                error.put(
-                        "message",
-                        "Could not reach GitHub. Check your network connection and try again."
-                );
-                sendUpdateResult(error);
-            } catch (Exception ignored) {
-            }
+            return buildUpdateResult(
+                    remoteCode,
+                    releaseName.isBlank() ? tag : releaseName,
+                    apkUrl,
+                    release.optString("html_url", LATEST_RELEASE_PAGE)
+            );
         } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+            if (connection != null) connection.disconnect();
         }
     }
 
-    private void downloadUpdateInternal(String downloadUrl) {
+    private JSONObject checkViaLatestPage() throws Exception {
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection)
-                    new URL(downloadUrl).openConnection();
+            connection = openConnection(LATEST_RELEASE_PAGE);
             connection.setInstanceFollowRedirects(true);
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(30000);
-            connection.setRequestProperty(
-                    "User-Agent",
-                    "LifePoints-Android"
+            int code = connection.getResponseCode();
+            if (code < 200 || code >= 400) {
+                throw new Exception("Release page HTTP " + code);
+            }
+
+            String finalUrl = connection.getURL().toString();
+            Matcher matcher = RELEASE_TAG_PAGE_PATTERN.matcher(finalUrl);
+            if (!matcher.find()) {
+                throw new Exception("Could not resolve latest release tag");
+            }
+            String tag = matcher.group(1);
+            long remoteCode = versionCodeFromTag(tag);
+            if (remoteCode <= 0) throw new Exception("Invalid release tag");
+
+            return buildUpdateResult(
+                    remoteCode,
+                    tag,
+                    LATEST_APK_URL,
+                    finalUrl
             );
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private JSONObject checkViaLatestAssetRedirect() throws Exception {
+        HttpURLConnection connection = null;
+        try {
+            connection = openConnection(LATEST_APK_URL);
+            connection.setInstanceFollowRedirects(false);
+            int code = connection.getResponseCode();
+            if (code < 300 || code >= 400) {
+                throw new Exception("Latest asset did not redirect");
+            }
+
+            String location = connection.getHeaderField("Location");
+            if (location == null || location.isBlank()) {
+                throw new Exception("Missing asset redirect");
+            }
+            String resolved = new URL(new URL(LATEST_APK_URL), location).toString();
+            Matcher matcher = RELEASE_TAG_DOWNLOAD_PATTERN.matcher(resolved);
+            if (!matcher.find()) {
+                throw new Exception("Could not resolve release tag from asset");
+            }
+            String tag = matcher.group(1);
+            long remoteCode = versionCodeFromTag(tag);
+            if (remoteCode <= 0) throw new Exception("Invalid release tag");
+
+            return buildUpdateResult(
+                    remoteCode,
+                    tag,
+                    LATEST_APK_URL,
+                    LATEST_RELEASE_PAGE
+            );
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private JSONObject buildUpdateResult(
+            long remoteCode,
+            String version,
+            String downloadUrl,
+            String releaseUrl
+    ) throws Exception {
+        JSONObject result = new JSONObject();
+        long localCode = currentVersionCode();
+        if (remoteCode <= localCode) {
+            result.put("status", "latest");
+            result.put("version", version);
+            result.put("currentVersion", getVersionName());
+        } else {
+            result.put("status", "available");
+            result.put("version", version);
+            result.put("versionCode", remoteCode);
+            result.put("currentVersion", getVersionName());
+            result.put("downloadUrl", downloadUrl);
+            result.put("releaseUrl", releaseUrl);
+        }
+        return result;
+    }
+
+    private String resolveLatestTagFromPage() {
+        HttpURLConnection connection = null;
+        try {
+            connection = openConnection(LATEST_RELEASE_PAGE);
+            connection.setInstanceFollowRedirects(true);
+            int code = connection.getResponseCode();
+            if (code < 200 || code >= 400) return null;
+            Matcher matcher = RELEASE_TAG_PAGE_PATTERN.matcher(
+                    connection.getURL().toString()
+            );
+            return matcher.find() ? matcher.group(1) : null;
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private void downloadUpdateInternal(String requestedUrl) {
+        Set<String> candidates = new LinkedHashSet<>();
+        if (isTrustedDownloadUrl(requestedUrl)) candidates.add(requestedUrl);
+        candidates.add(LATEST_APK_URL);
+
+        String latestTag = resolveLatestTagFromPage();
+        if (latestTag != null && !latestTag.isBlank()) {
+            candidates.add(
+                    RELEASE_DOWNLOAD_PREFIX
+                            + latestTag
+                            + "/LifePoints.apk"
+            );
+        }
+
+        for (String candidate : candidates) {
+            File apk = tryDownload(candidate);
+            if (apk != null) {
+                pendingUpdateApk = apk;
+                sendDownloadState(
+                        "installing",
+                        "Opening the Android installer…"
+                );
+                activity.runOnUiThread(() -> requestInstall(apk));
+                return;
+            }
+        }
+
+        sendDownloadState(
+                "error",
+                "Could not download the update through the available GitHub paths."
+        );
+    }
+
+    private File tryDownload(String downloadUrl) {
+        if (!isTrustedDownloadUrl(downloadUrl)) return null;
+
+        HttpURLConnection connection = null;
+        File apk = null;
+        try {
+            connection = openConnection(downloadUrl);
+            connection.setInstanceFollowRedirects(true);
+            connection.setReadTimeout(30000);
 
             int code = connection.getResponseCode();
-            if (code < 200 || code >= 300) {
-                sendDownloadState(
-                        "error",
-                        "The APK download failed with HTTP " + code + "."
-                );
-                return;
-            }
+            if (code < 200 || code >= 300) return null;
 
-            File directory =
-                    activity.getExternalFilesDir(
-                            Environment.DIRECTORY_DOWNLOADS
-                    );
-            if (directory == null) {
-                directory = activity.getCacheDir();
-            }
-            if (!directory.exists() && !directory.mkdirs()) {
-                sendDownloadState(
-                        "error",
-                        "Could not create the update folder."
-                );
-                return;
-            }
+            File directory = activity.getExternalFilesDir(
+                    Environment.DIRECTORY_DOWNLOADS
+            );
+            if (directory == null) directory = activity.getCacheDir();
+            if (!directory.exists() && !directory.mkdirs()) return null;
 
-            File apk = new File(directory, "LifePoints-update.apk");
-            try (BufferedInputStream input =
-                         new BufferedInputStream(
-                                 connection.getInputStream()
-                         );
-                 FileOutputStream output =
-                         new FileOutputStream(apk)) {
+            apk = new File(directory, "LifePoints-update.apk");
+            try (BufferedInputStream input = new BufferedInputStream(
+                    connection.getInputStream()
+            ); FileOutputStream output = new FileOutputStream(apk)) {
                 byte[] buffer = new byte[16384];
                 int read;
                 while ((read = input.read(buffer)) != -1) {
@@ -294,35 +430,21 @@ public class UpdateBridge {
             }
 
             if (!apk.exists() || apk.length() < 1024) {
-                sendDownloadState(
-                        "error",
-                        "The downloaded APK was incomplete."
-                );
-                return;
+                if (apk.exists()) apk.delete();
+                return null;
             }
-
-            pendingUpdateApk = apk;
-            sendDownloadState(
-                    "installing",
-                    "Opening the Android installer…"
-            );
-            activity.runOnUiThread(() -> requestInstall(apk));
-        } catch (Exception e) {
-            sendDownloadState(
-                    "error",
-                    "Could not download the update."
-            );
+            return apk;
+        } catch (Exception ignored) {
+            if (apk != null && apk.exists()) apk.delete();
+            return null;
         } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+            if (connection != null) connection.disconnect();
         }
     }
 
     private boolean canInstallPackages() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.O
-                || activity.getPackageManager()
-                .canRequestPackageInstalls();
+                || activity.getPackageManager().canRequestPackageInstalls();
     }
 
     private void requestInstall(File apk) {
@@ -336,9 +458,7 @@ public class UpdateBridge {
             try {
                 Intent intent = new Intent(
                         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse(
-                                "package:" + activity.getPackageName()
-                        )
+                        Uri.parse("package:" + activity.getPackageName())
                 );
                 activity.startActivity(intent);
             } catch (Exception e) {
@@ -385,17 +505,11 @@ public class UpdateBridge {
         ));
     }
 
-    private void sendDownloadState(
-            String status,
-            String message
-    ) {
+    private void sendDownloadState(String status, String message) {
         try {
             JSONObject result = new JSONObject();
             result.put("status", status);
-            result.put(
-                    "message",
-                    message == null ? "" : message
-            );
+            result.put("message", message == null ? "" : message);
             activity.runOnUiThread(() -> webView.evaluateJavascript(
                     "window.LifePointsDownloadState&&window.LifePointsDownloadState("
                             + result.toString() + ");",
