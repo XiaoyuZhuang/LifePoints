@@ -107,6 +107,7 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 injectAssetScript("timeline_undo.js");
                 injectAssetScript("update_checker.js");
+                injectAssetScript("settings_enhancements.js");
             }
 
             @Override
@@ -255,6 +256,12 @@ public class MainActivity extends Activity {
         super.onResume();
         if (updateBridge != null) {
             updateBridge.onResume();
+        }
+        if (webView != null) {
+            webView.evaluateJavascript(
+                    "window.LifePointsMaybeAutoCheck&&window.LifePointsMaybeAutoCheck();",
+                    null
+            );
         }
     }
 
