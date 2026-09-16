@@ -1,5 +1,8 @@
 # LifePoints
 
+[![Latest Release](https://img.shields.io/github/v/release/XiaoyuZhuang/LifePoints?label=latest)](https://github.com/XiaoyuZhuang/LifePoints/releases/latest)
+[![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-green)](https://github.com/XiaoyuZhuang/LifePoints/releases/latest)
+
 > 把想做的事情变成积分，把想享受的事情变成奖励。
 
 **LifePoints** 是一个轻量、离线优先的个人积分与自律工具。你可以为学习、工作、运动等重复事项设置积分，完成后即时获得积分；也可以把游戏、影视、零食、购物等设为奖励，用积分兑换。整个过程都记录在时间线里，方便回顾，也可以撤回误操作。
