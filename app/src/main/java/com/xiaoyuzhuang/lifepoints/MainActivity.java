@@ -18,6 +18,8 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -54,8 +56,6 @@ public class MainActivity extends Activity {
         root.addView(webView, webParams);
         setContentView(root);
 
-        // Android 15+ forces edge-to-edge for targetSdk 35. Keep the app content
-        // inside the actual system bar insets on every device.
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             int top;
             int bottom;
@@ -90,6 +90,12 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new AndroidBridge(), "LifePointsAndroid");
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                injectAssetScript("timeline_undo.js");
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return openExternal(request.getUrl());
             }
@@ -115,6 +121,19 @@ public class MainActivity extends Activity {
 
         applyTheme(initialTheme);
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    private void injectAssetScript(String assetName) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(getAssets().open(assetName), StandardCharsets.UTF_8))) {
+            StringBuilder script = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                script.append(line).append('\n');
+            }
+            webView.evaluateJavascript(script.toString(), null);
+        } catch (Exception ignored) {
+        }
     }
 
     private void applyTheme(String theme) {
@@ -160,9 +179,6 @@ public class MainActivity extends Activity {
 
     private void performHaptic(String kind) {
         runOnUiThread(() -> {
-            // Use Android's system haptic-feedback pipeline instead of a custom
-            // vibration duration. This respects the user's system haptic setting
-            // and intensity preference on the device.
             int constant = HapticFeedbackConstants.VIRTUAL_KEY;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if ("success".equalsIgnoreCase(kind)) {
