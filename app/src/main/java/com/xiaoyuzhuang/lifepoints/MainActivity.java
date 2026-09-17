@@ -68,14 +68,16 @@ public class MainActivity extends Activity {
             int top;
             int bottom;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                android.graphics.Insets bars =
+                        insets.getInsets(WindowInsets.Type.systemBars());
                 top = bars.top;
                 bottom = bars.bottom;
             } else {
                 top = insets.getSystemWindowInsetTop();
                 bottom = insets.getSystemWindowInsetBottom();
             }
-            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) webView.getLayoutParams();
+            FrameLayout.LayoutParams lp =
+                    (FrameLayout.LayoutParams) webView.getLayoutParams();
             if (lp.topMargin != top || lp.bottomMargin != bottom) {
                 lp.topMargin = top;
                 lp.bottomMargin = bottom;
@@ -108,6 +110,7 @@ public class MainActivity extends Activity {
                 injectAssetScript("reward_multiplier.js");
                 injectAssetScript("settings_enhancements.js");
                 injectAssetScript("update_failure_ui.js");
+                injectAssetScript("timeline_dates.js");
             }
 
             @Override
