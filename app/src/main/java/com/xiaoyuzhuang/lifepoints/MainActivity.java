@@ -111,6 +111,7 @@ public class MainActivity extends Activity {
                 injectAssetScript("settings_enhancements.js");
                 injectAssetScript("update_failure_ui.js");
                 injectAssetScript("timeline_dates.js");
+                injectAssetScript("list_reorder.js");
             }
 
             @Override
